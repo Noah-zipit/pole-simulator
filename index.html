@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>POLE — 3D Pole Dancer Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='14' y='2' width='4' height='28' rx='2' fill='%23ff2d78'/></svg>" />
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { width:100%; height:100%; overflow:hidden; background:#07060c; font-family:'Segoe UI',system-ui,sans-serif; color:#f5eef4; }
+    #app { position:fixed; inset:0; }
+    canvas { display:block; }
+    .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:50; }
+    .hidden { display:none !important; }
+
+    /* 18+ gate */
+    #gate { background:rgba(5,4,10,.96); flex-direction:column; gap:18px; text-align:center; padding:24px; }
+    #gate h1 { font-size:44px; letter-spacing:14px; color:#ff2d78; text-shadow:0 0 24px #ff2d78; font-weight:800; }
+    #gate p { color:#b9a8b8; max-width:420px; line-height:1.6; }
+    #gate .row { display:flex; gap:14px; }
+    .btn { cursor:pointer; border:1px solid #ff2d78; background:rgba(255,45,120,.12); color:#ffd7e6; padding:12px 26px; border-radius:10px; font-size:16px; letter-spacing:1px; transition:all .15s; user-select:none; }
+    .btn:hover { background:rgba(255,45,120,.3); box-shadow:0 0 18px rgba(255,45,120,.5); }
+    .btn:active { transform:scale(.96); }
+    .btn.cyan { border-color:#22d3ee; background:rgba(34,211,238,.1); color:#d3f6ff; }
+    .btn.cyan:hover { background:rgba(34,211,238,.28); box-shadow:0 0 18px rgba(34,211,238,.5); }
+    .btn.gold { border-color:#fbbf24; background:rgba(251,191,36,.1); color:#fde9b8; }
+    .btn:disabled { opacity:.35; cursor:default; box-shadow:none; }
+
+    /* HUD */
+    #hud { position:fixed; top:0; left:0; right:0; z-index:20; display:flex; justify-content:space-between; align-items:flex-start; padding:12px 14px; pointer-events:none; }
+    #hud .panel { pointer-events:auto; background:rgba(10,8,18,.72); border:1px solid rgba(255,45,120,.35); border-radius:12px; padding:8px 14px; backdrop-filter:blur(6px); }
+    #tips-now { font-size:22px; font-weight:700; color:#7CFF6b; text-shadow:0 0 12px rgba(124,255,107,.6); }
+    #tips-life { font-size:12px; color:#b9a8b8; }
+    #strip-meter-wrap { margin-top:6px; width:170px; }
+    #strip-meter-label { font-size:11px; color:#ffb3cd; letter-spacing:1px; margin-bottom:3px; }
+    #strip-meter { height:8px; background:#241a26; border-radius:4px; overflow:hidden; }
+    #strip-fill { height:100%; width:0%; background:linear-gradient(90deg,#ff2d78,#ff7ab8); transition:width .4s; box-shadow:0 0 10px #ff2d78; }
+
+    /* bottom controls */
+    #controls { position:fixed; bottom:0; left:0; right:0; z-index:20; display:flex; flex-direction:column; gap:8px; padding:10px 12px 14px; pointer-events:none; }
+    #controls .row { display:flex; gap:8px; justify-content:center; pointer-events:auto; flex-wrap:wrap; }
+    .chip { cursor:pointer; border:1px solid rgba(255,45,120,.5); background:rgba(12,8,20,.78); color:#ffd7e6; padding:9px 14px; border-radius:999px; font-size:13px; letter-spacing:.5px; user-select:none; backdrop-filter:blur(6px); transition:all .12s; }
+    .chip:hover { background:rgba(255,45,120,.3); }
+    .chip:active { transform:scale(.94); }
+    .chip.cyan { border-color:rgba(34,211,238,.5); color:#d3f6ff; }
+    .chip.cyan:hover { background:rgba(34,211,238,.25); }
+    .chip.gold { border-color:rgba(251,191,36,.55); color:#fde9b8; }
+    .chip.gold:hover { background:rgba(251,191,36,.22); }
+    .chip.active { background:rgba(255,45,120,.4); box-shadow:0 0 14px rgba(255,45,120,.6); }
+
+    /* side camera presets */
+    #cams { position:fixed; right:10px; top:50%; transform:translateY(-50%); z-index:20; display:flex; flex-direction:column; gap:8px; }
+    #cams .chip { padding:8px 10px; font-size:11px; }
+
+    /* panels */
+    .panel-modal { position:fixed; z-index:40; background:rgba(12,8,20,.95); border:1px solid rgba(255,45,120,.4); border-radius:14px; padding:18px; max-width:340px; width:calc(100% - 40px); left:50%; top:50%; transform:translate(-50%,-50%); }
+    .panel-modal h2 { color:#ff2d78; letter-spacing:3px; margin-bottom:12px; font-size:18px; }
+    .panel-modal .opt { display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(255,45,120,.15); }
+    .panel-modal p.small { font-size:12px; color:#b9a8b8; line-height:1.5; margin-top:10px; }
+    #toast { position:fixed; top:76px; left:50%; transform:translateX(-50%); z-index:30; background:rgba(12,8,20,.9); border:1px solid #ff2d78; color:#ffd7e6; padding:10px 22px; border-radius:999px; font-size:14px; letter-spacing:1px; opacity:0; transition:opacity .3s; pointer-events:none; box-shadow:0 0 20px rgba(255,45,120,.5); }
+
+    #loading { background:#07060c; flex-direction:column; gap:16px; z-index:60; }
+    #loading .bar { width:220px; height:6px; background:#241a26; border-radius:3px; overflow:hidden; }
+    #loading .bar i { display:block; height:100%; width:30%; background:#ff2d78; border-radius:3px; animation:slide 1s infinite linear; }
+    @keyframes slide { from { transform:translateX(-100%);} to { transform:translateX(320%);} }
+    #loading p { color:#b9a8b8; font-size:13px; letter-spacing:2px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="loading" class="overlay">
+    <div class="bar"><i></i></div>
+    <p>LOADING THE CLUB…</p>
+  </div>
+
+  <div id="gate" class="overlay hidden">
+    <h1>POLE</h1>
+    <p>This is an adult 3D dance simulator with nudity. You must be 18 or older to enter.</p>
+    <div class="row">
+      <button class="btn" id="gate-yes">I AM 18+</button>
+      <button class="btn cyan" id="gate-no">EXIT</button>
+    </div>
+  </div>
+
+  <div id="hud" class="hidden">
+    <div class="panel">
+      <div id="tips-now">$0</div>
+      <div id="tips-life">lifetime $0</div>
+      <div id="strip-meter-wrap">
+        <div id="strip-meter-label">STRIP METER</div>
+        <div id="strip-meter"><div id="strip-fill"></div></div>
+      </div>
+    </div>
+    <div class="panel" style="display:flex; gap:8px; align-items:center;">
+      <button class="chip cyan" id="btn-wardrobe">WARDROBE</button>
+      <button class="chip cyan" id="btn-autocam">AUTO-CAM</button>
+      <button class="chip cyan" id="btn-mute">SOUND ON</button>
+      <button class="chip cyan" id="btn-credits">CREDITS</button>
+    </div>
+  </div>
+
+  <div id="cams" class="hidden">
+    <button class="chip cyan" data-cam="front">FRONT</button>
+    <button class="chip cyan" data-cam="side">SIDE</button>
+    <button class="chip cyan" data-cam="top">TOP</button>
+    <button class="chip cyan" data-cam="close">CLOSE</button>
+  </div>
+
+  <div id="controls" class="hidden">
+    <div class="row" id="move-row">
+      <button class="chip" data-move="spin">SPIN</button>
+      <button class="chip" data-move="climb">CLIMB</button>
+      <button class="chip" data-move="invert">INVERT</button>
+      <button class="chip" data-move="floor">FLOOR</button>
+      <button class="chip" data-move="idle">SLOW</button>
+    </div>
+    <div class="row">
+      <button class="chip gold" data-tip="1">THROW $1</button>
+      <button class="chip gold" data-tip="5">THROW $5</button>
+      <button class="chip gold" data-tip="20">THROW $20</button>
+      <button class="chip gold" data-tip="50">MAKE IT RAIN $50</button>
+    </div>
+  </div>
+
+  <div id="wardrobe" class="panel-modal hidden">
+    <h2>WARDROBE</h2>
+    <div id="outfit-list"></div>
+    <p class="small">Outfits are bought with lifetime tips. Changing outfit restores clothing.</p>
+    <div style="margin-top:12px; text-align:right;"><button class="btn cyan" id="wardrobe-close">CLOSE</button></div>
+  </div>
+
+  <div id="credits" class="panel-modal hidden">
+    <h2>CREDITS</h2>
+    <div class="opt"><span>Character "Jill"</span><span style="color:#b9a8b8">MasterPuppet (itch.io, free)</span></div>
+    <div class="opt"><span>Engine</span><span style="color:#b9a8b8">Three.js</span></div>
+    <div class="opt"><span>Music &amp; SFX</span><span style="color:#b9a8b8">synthesized in-browser</span></div>
+    <div style="margin-top:12px; text-align:right;"><button class="btn cyan" id="credits-close">CLOSE</button></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
